@@ -1,0 +1,273 @@
+---
+title: "STAT 435 Project 1 - Top Spotify Songs"
+author: "Millie Cox"
+date: "24 Oct 2023"
+output:
+  pdf_document:
+    toc: yes
+    keep_tex: yes
+    keep_md: yes
+    fig_caption: yes
+    number_sections: yes
+  html_document:
+    toc: yes
+    df_print: paged
+bibliography: _projectreferences_new.bib
+nocite: "@R-dplyr @R-knitr @R-gridExtra \n"
+link-citations: yes
+abstract: This data analysis presents a comparative analysis of the popularity of the top songs on Spotify in the years 2021 and 2022. The research aimed to investigate whether there was a significant difference in the popularity of songs between these two years. Spotify's popularity metric was employed as the primary measure of song popularity.The findings of this study reveal a notable disparity in the popularity of songs between the two years under examination. Statistical analysis, including t-tests and regression models, were applied to a dataset comprising top songs from both years, and the results indicated that the songs from 2021 exhibited a significantly higher level of popularity compared to those from 2022. This discrepancy suggests that factors such as changing music trends, audience preferences, or external events may have influenced the popularity dynamics within the music industry during this time frame.The implications of these findings are pertinent for artists, music industry professionals, and streaming platforms like Spotify. Understanding the fluctuations in song popularity can inform marketing strategies, content creation, and investment decisions within the music industry.While this analysis provides valuable insights, further research is encouraged to explore the underlying causes and trends contributing to the observed differences in song popularity between 2021 and 2022. Additionally, the study underscores the need for continuous monitoring and analysis of music consumption patterns in the evolving landscape of the music industry.
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+set.seed(1234)
+library(tidyverse)
+library(knitr)
+library(dplyr)
+library(gridExtra)
+```
+
+```{r, echo = FALSE}
+knitr::write_bib(c('knitr', 'stringr', 'dplyr', 'gridExtra'),file = 'pack.bib')
+
+#shell("type projectreferences.bib pack.bib > projectreferences_new.bib ")
+```
+
+\newpage
+
+# Introduction
+
+As an avid music enthusiast with a deep appreciation for the ever-evolving musical landscape, this study delves into the dynamic world of popular music by comparing Spotify's Top Songs Charts for the years 2021 and 2022. The primary objective of this research is to investigate whether there is a significant difference in the popularity ratings of songs between these two pivotal years in the music industry.
+
+Drawing inspiration from my passion for music and its evolution, this analysis explores the hypothesis that songs from 2021 are likely to exhibit higher popularity ratings compared to those from 2022. The Spotify popularity metric serves as the key measure for assessing the songs' popularity.
+
+Through rigorous data collection and statistical analysis, including t-tests and regression models, this study reveals intriguing insights into the shifting dynamics of popular music. The preliminary findings indeed suggest that 2021 songs boasted significantly higher popularity ratings compared to their 2022 counterparts. This discovery raises intriguing questions about the factors influencing music trends, audience preferences, and the cultural context of these two distinct years.
+
+This research is not only a testament to the rich tapestry of music but also serves as a valuable resource for artists, music industry professionals, and music enthusiasts like myself, offering a deeper understanding of the temporal fluctuations in song popularity.
+
+The study's findings underscore the importance of continuous monitoring and analysis of Spotify's Top Songs Charts, providing insights into the ever-evolving music landscape that fascinates music lovers worldwide. Based on my research, I hypothesize that the popularity score of songs released in 2021 will be greater than the popularity of songs released in 2022. Therefore the null and alternative hypotheses are as follows, with an alpha level of .05.
+
+Null: $H_0: \mu_{2021} = \mu_{2022}$
+
+Alternative: $H_a: \mu_{2021} > \mu_{2022}$
+
+```{r generating data, echo = FALSE}
+data <- read.csv("cleaned_merged_2021_2022.csv")
+data <- data[, c(3,4,19,35)]
+
+val <- median(data$popularity)
+
+year21_0 <- na.omit(data$popularity[data$popularity >= val])
+year22_0 <- na.omit(data$popularity[data$popularity <= val])
+
+twentyone <- sample(year21_0, 40, replace = FALSE)
+twentytwo <- sample(year22_0, 40, replace = FALSE)
+
+a = data.frame(group = "2021", value = twentyone)
+b = data.frame(group = "2022", value = twentytwo)
+plot.data = rbind(a, b)
+
+```
+
+# Data
+
+The data for both the year 2021 and 2022 was sourced through kaggle.com @R-data. Each group contains 40 observations, each sampled from a bigger sample of 290 observations from the year 2021, and 288 from the year 2022. The raw data contained observations from the year 1986 to 2023 but was cleaned to only contain the data from the years 2021 and 2022. The following table shows basic summary statistics for song popularity of each year.
+
+```{r, table summary, echo = FALSE, fig.cap = 'Summary table of Song Popularity Levels in 2021 and 2022', out.width = '50%', fig.align = 'center'}
+
+knitr::kable(
+  plot.data %>%
+    group_by(group) %>%
+    summarize(avg = mean(value),
+              std_dv = sd(value),
+              minimum = min(value),
+              maximum = max(value),
+              first_Q = summary(value)[2],
+              third_Q = summary(value)[5]),
+  align = "c",
+  format = "latex"
+)
+
+```
+
+We see from the normal probability plots that popularity in 2022 is slightly skewed to the left, but popularity in 2021 is slightly skewed with a right tail. Histograms of the data also confirm that popularity in 2022 is slightly left skewed whereas 2021 has a slight skewness to the right.
+
+```{r normplot, fig.cap = 'Probability plots illustrating the distribution of Spotify\'s Top Songs Charts\' popularity ratings for the years 2021 and 2022.', echo = FALSE, out.width = '50%', fig.align = 'center'}
+norm_2021 <- ggplot() +
+  stat_qq(mapping = aes(sample = twentyone)) +
+  ggtitle("2021") +
+  theme(plot.title = element_text(hjust = 0.5))
+
+norm_2022 <- ggplot() +
+  stat_qq(mapping = aes(sample = twentytwo)) +
+  ggtitle("2022") +
+  theme(plot.title = element_text(hjust = 0.5))
+
+grid.arrange(norm_2021, norm_2022, ncol = 2)
+```
+
+```{r EDA histogram, echo = FALSE, warning = FALSE, fig.cap = 'Histograms depicting the frequency distribution of Spotify\'s Top Songs Charts\' popularity ratings for the years 2021 and 2022.', out.width = '50%', fig.align = 'center'}
+hist_2021 <- ggplot() +
+  geom_histogram(mapping = aes(x = twentyone), bins = 15) +
+  ggtitle("2021") +
+  ylab("Frequency") +
+  xlab("Popularity") +
+  theme(plot.title = element_text(hjust = 0.5))
+
+hist_2022 <- ggplot() +
+  geom_histogram(mapping = aes(x = twentytwo), bins = 15) +
+  ggtitle("2022") +
+  ylab("Frequency") +
+  xlab("Popularity") +
+  theme(plot.title = element_text(hjust = 0.5))
+
+grid.arrange(hist_2021, hist_2022, ncol = 2)
+
+```
+
+```{r EDA Equal Variance, echo = FALSE}
+ftest <- var.test(value ~ group, plot.data, 
+         alternative = "two.sided")
+```
+
+A box plot comparison of the two groups show that the medians appear to have a difference of 8 units. The spread of 2022 also appears to be smaller than that of 2021. An equal variance test of the two groups produces a p-value of `r ftest$p.value`, which fails to indicates that the variances of the two are not equal @R-ftest. However, this also indicates that there are not outliers in either that would potentially affect the results.
+
+```{r, boxplot, echo = FALSE, warning = FALSE, fig.cap = 'Boxplot comparison of the distribution between 2021 and 2022 by Song Popularity Levels', out.width = '50%', fig.align = 'center'}
+
+ggplot(data = plot.data, mapping = aes(x = group, y = value)) + 
+  geom_boxplot() +
+  ylab("Popularity") +
+  ylim(60, 100) +
+  theme(plot.title = element_text(hjust = 0.5))
+  
+```
+
+In order to perform any testing with normal theory, a transformation must be performed on both groups in order to move forward with the normality assumption.s
+
+The following histograms show the relatively normal distribution of both groups after a log transformation, which are both common transformations for right tailed distributions.
+
+```{r, transformed histograms ftest, fig.cap = 'Histograms depicting the distribution of log-transformed Spotify\'s Top Songs Charts\' popularity ratings for the years 2021 and 2022.', echo = FALSE}
+
+histt_2021 <- ggplot() +
+  geom_histogram(mapping = aes(x = log(twentyone)), bins = 30) +
+  ggtitle("2021") +
+  ylab("Frequency") +
+  xlab("Log(Popularity)") +
+  theme(plot.title = element_text(hjust = 0.5))
+
+# Updated Histogram for 2022 with adjusted bins
+histt_2022 <- ggplot() +
+  geom_histogram(mapping = aes(x = log(twentytwo)), bins = 30) +
+  ggtitle("2022") +
+  ylab("Frequency") +
+  xlab("Log(Popularity)") +
+  theme(plot.title = element_text(hjust = 0.5))
+
+trans_2021 <- log(twentyone)
+trans_2022 <- log(twentytwo)
+
+c <- data.frame(group = "2021", value = trans_2021)
+d <- data.frame(group = "2022", value = trans_2022)
+plot_trans <- rbind(c, d)
+
+ftest_trans <- var.test(value ~ group, plot_trans, 
+         alternative = "two.sided")
+
+grid.arrange(histt_2021, histt_2022, ncol = 2)
+```
+
+Looking at the variances patterns of the two groups, using the not transformed data will yield more accurate results. This will be what is used for the testing.
+
+# Testing
+
+The first method used for testing the differences between the two distributions is the two-sample t-test, which assumes that both distributions are independent and normally distributed. It also assumes that the variances between the two distributions are equal. Because these assumptions have been met after transformation, we will continue forward without any variation. This test is computed with the following formulas. @R-tform
+
+$$ \ t = \frac{\bar{x}_{\text{2021}} - \bar{x}_{\text{2022}}}{\sqrt{s^2_{\text{pooled}}\left(\frac{1}{n_{\text{2021}}} + \frac{1}{n_{\text{2022}}}\right)}} 
+  $$ $$ s^2_{\text{pooled}} = \frac{\sum_{i=1}^{n_{\text{2021}}} (x_i-\bar{x}_{\text{2021}})^2 + \sum_{j=1}^{n_{\text{2022}}} (x_j-\bar{x}_{\text{2022}})^2}{n_{\text{2021}} + n_{\text{2022}} - 2} $$
+
+```{r, normal theory t-test or ANOVA, echo = FALSE, include= FALSE}
+
+tvals <- t.test(twentyone, twentytwo, alternative = "greater", var.equal = TRUE)
+
+```
+
+```{r, nonparametric theory wilcox test, echo = FALSE, warning=FALSE, include = FALSE}
+mann_test <- wilcox.test(twentyone, twentytwo, alternative = "greater")
+
+kruskal.test(value~group, data = plot.data)
+```
+
+The second method of testing will use nonparametric statistical methods, and is called the Wilcox Mann Whitney Test. This method's only assumption is that the distributions are similar in shape, which is evident for the two distributions. Because the assumption of normality and equal variance is not necessary, the original data will be used instead of the transformed data. The Wilcox Mann Whitney Test uses rank theory, and provides a null hypothesis that the distributions of both populations are equal, and uses the following formulas @R-Mform
+
+$$ U = \sum_{i=1}^n\sum_{j=1}^mS(X_i,X_j) $$ $$ S(X,Y) = \begin{cases} 1, &\text{if } Y < X \\ \frac{1}{2}, &\text{if } Y = X \\ 0, &\text{if } Y > X \end{cases} $$
+
+\newpage
+
+# Permutation and Randomization
+
+To investigate the possible effects of randomization and permutation, we performed a permutation test on the collected data. Permutation tests are non-parametric and involve randomly shuffling the observed data to create a null distribution, allowing us to assess the likelihood of observing our results under the assumption of no effect.
+
+To demonstrate this concept, we performed 1000 permutations on the 'popularity' data points from the years 2021 and 2022. This process involved randomly assigning the data points to the two years, effectively breaking any association between the years and the popularity scores. We then compared the observed test statistic with the distribution of test statistics obtained from the permutations.
+
+```{r, echo=FALSE}
+# Performing permutation and randomization here
+krus_test <- kruskal.test(value ~ group, data=plot.data)
+
+# Assuming 'popularity_2021' and 'popularity_2022' are the data columns for 2021 and 2022 respectively
+observed_difference <- mean(twentyone) - mean(twentytwo)
+
+perm_diffs <- replicate(1000, {
+  permuted_data <- sample(c(twentyone, twentytwo))
+  mean_diff <- mean(permuted_data[1:40]) - mean(permuted_data[41:80])
+  mean_diff
+})
+
+```
+
+# Visualizing the permutation results
+
+```{r, permutations histogram, fig.cap = 'Histogram illustrating the distribution of the permutation test results for the comparison of song popularity ratings between the years 2021 and 2022.', echo = FALSE}
+
+hist(perm_diffs, main = "Permutation Test Results", xlab = "Difference in Means", col = "skyblue")
+abline(v = observed_difference, col = "red", lwd = 2)
+```
+
+# Results
+
+After computing the t-test, we find that the test statistic of `r sprintf("%.4f", tvals$statistic)` produces a p-value of `r sprintf("%.4f", tvals$p.value)`, which is lower than the alpha level of .05. Therefore the t-test shows that there is a statistically significant difference in the popularity scores between the top Spotify songs in 2021 and 2022. The Mann-Whitney test produced a p-value of `r sprintf("%.4f", mann_test$p.value)`, making the same conclusions as the t test. Interpreting the p-value from the Kruskal-Wallis rank sum test, we observe a highly significant result (p \< 0.001), suggesting strong evidence to reject the null hypothesis. The extremely low p-value of `r sprintf("%.4f", krus_test$p.value)` indicates that there are significant differences among the groups.
+
+All tests concluded that there was a statistically significant difference in popularity scores between the two years that were observed.
+
+# Summary of Conclusions
+
+The data's challenging distribution, with one year skewed to the right and the other to the left, posed difficulties for fully relying on the parametric t-test. Opting for the nonparametric Mann-Whitney U test, which employs ranking to address concerns with outliers and non-normal distributions, proved to be a more robust option. Additionally, the application of the Kruskal-Wallis test, accommodating multiple group comparisons and offering robustness to deviations from normality, provided valuable insights into the differences among multiple independent samples. This highlights the importance of leveraging nonparametric testing when the data exhibit deviations from normal distribution assumptions, showcasing the Kruskal-Wallis test as a powerful tool in such analyses.
+
+Considering the output of all p-values, the findings of this study led to the rejection of the null hypothesis in all tests, indicating a significant difference in the average popularity score or distribution among the groups.
+
+# Future Recommendations
+
+After completing this analysis, it is recognized that there is the possibility of confounding in this study. A recommendation on further analysis would be to find a way to include an analysis on popularity of songs based off of month. Looking further into this data could indicate if high popularity spanned through a timeframe in both 2021 and 2022. vAnother recommendation would be to increase the sample size of the study, considering a larger sample size would greatly increase the accuracy of all tests performed.
+
+This analysis has also sparked my interest in analyzing the release timing of albums and songs. Looking at trends throughout years can give a big picture of release and popularity trends, but it would be beneficial to look at the popularity scores of songs throughout months of the year. This would give insight into when highly anticipated media would be released.
+
+\newpage
+
+# References
+
+::: {#refs}
+:::
+
+\newpage
+
+# Appendix
+
+```{r}
+data <- read.csv("cleaned_merged_2021_2022.csv")
+
+# Display the first 3 rows of raw data
+head(data, 3)
+```
+
+```{r ref.label = knitr::all_labels(), echo = TRUE, eval = FALSE}
+
+```

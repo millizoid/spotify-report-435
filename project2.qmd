@@ -1,0 +1,721 @@
+---
+title: "STAT 435 Project 2 - Top Spotify Songs"
+author: "Millie Cox"
+date: "13 Nov 2023"
+format: pdf
+output:
+  pdf_document:
+    toc: yes
+    keep_tex: yes
+    keep_md: yes
+    fig_caption: yes
+    number_sections: yes
+  html_document:
+    toc: yes
+    df_print: paged
+bibliography: _projectreferences_new.bib
+nocite: "@R-dplyr @R-knitr @R-gridExtra \n"
+link-citations: true
+abstract: In this study, we conducted an in-depth analysis of Spotify song data to unveil the intricate relationships between various predictor variables and the response variable, popularity. It takes the results from analyzing the popularity of the top songs on Spotify in the years 2021 and 2022 and dives into what other variables influence song popularity. Leveraging a generalized linear model (GLM) with an extensive array of interactions, we systematically examined the significance of factors such as explicitness, release year, artist prominence, acoustic characteristics, song length, and energy levels. Our results, as determined through ANOVA and Wald tests, illuminated the nuanced impact of these variables and their interactions on song popularity. Noteworthy main effects were identified, including the substantial influence of the release year, explicit content, and top artist prominence. Furthermore, significant interaction effects, such as the interplay between year and top artist status, underscored the complexity of factors contributing to song popularity. These findings were visually represented through bar plots, providing a comprehensive overview of estimated coefficients and their confidence intervals, enhancing our understanding of the intricate dynamics shaping musical preferences on the Spotify platform. This research contributes valuable insights into the multifaceted nature of song popularity, offering a foundation for further exploration and refinement of predictive models in the evolving landscape of music consumption.
+editor: 
+  markdown: 
+    wrap: 72
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(readr)
+library(tidyverse)
+library(rpart)
+library(rpart.plot)
+library(partykit)
+library(knitr)
+library(party)
+library(caret)
+library(dplyr)
+library(gridExtra)
+library(scales)
+library(lmtest)
+```
+
+```{r, echo = FALSE}
+knitr::write_bib(c('knitr', 'stringr', 'dplyr', 'gridExtra'),file = 'pack.bib')
+
+#shell("type projectreferences.bib pack.bib > projectreferences_new.bib ")
+```
+
+\newpage
+
+# Introduction
+
+In this study, I extend my exploration of the dynamic realm of popular
+music by conducting a comprehensive analysis to identify the factors
+that significantly contribute to a song's popularity in the years 2021
+and 2022. Building upon previous research that examined the distinctions
+between these two pivotal years, the focus shifts towards fitting the
+best model using Generalized Linear Modeling (GLM) and Logistic
+Regression to discern the key determinants of high popularity scores.
+For more information on the previous research, refer to Project 1
+@R-Project1.
+
+The variables under scrutiny encompass explicit content, principal
+artist followers, acousticness, year, song length, and energy, all of
+which are posited as potential significant factors influencing a song's
+popularity on Spotify. This investigation seeks to unravel the nuanced
+interplay of these variables and their collective impact on the evolving
+landscape of popular music.
+
+Unlike the earlier exploration, which primarily aimed at discerning
+differences between the years 2021 and 2022, this research aims to
+provide a more nuanced understanding by delving into the specific
+factors that contribute to elevated popularity scores. The Spotify
+popularity metric remains the linchpin of our assessment, offering a
+standardized measure to gauge the songs' relative popularity.
+
+Through a meticulous application of statistical methodologies, this
+study aims to uncover insights that transcend mere temporal comparisons.
+Rather than focusing on year-to-year disparities, the analysis strives
+to pinpoint the underlying factors that consistently drive heightened
+popularity across both 2021 and 2022.
+
+As I look into this data, I anticipate that explicit content, principal
+artist followers, acousticness, year, song length, and energy
+collectively weave a complex narrative that shapes the success of songs
+in the Spotify ecosystem. This nuanced perspective aims to move beyond
+the binary contrast of years and shed light on the multifaceted
+influences that contribute to a song's enduring appeal.
+
+The outcomes of this research will not only enrich our understanding of
+the intricate fabric of popular music but also serve as a valuable
+resource for artists, industry professionals, and music enthusiasts. By
+unraveling the nuanced determinants of song popularity, this study aims
+to provide actionable insights that contribute to the continuous
+evolution of the music landscape.
+
+Null:
+$H_{0}^{2}: \beta_{Explicit} = \beta_{Year} = \beta_{Acousticness} = \beta_{Energy} = \beta_{Song Length} = \beta_{Artist Followers} = 0$
+
+This means none of the examined variables have a significant impact on
+the popularity of songs.
+
+Alternative: At least one of the coefficients
+($\beta_{Explicit}, \beta_{Year}, \beta_{Acousticness}, \beta_{Energy}, \beta_{Song Length}, \beta_{Artist Followers}$)
+$\neq0$
+
+\newpage
+
+# Data
+
+```{r data read in, echo=FALSE}
+SpotifySongs <- read_csv("cleaned_merged_2021_2022.csv", show_col_types=FALSE)
+```
+
+All data for this research was sourced through kaggle.com @R-data. The
+data covers the top songs for the years 2021 and 2022. In the data there
+are 290 observations from the year 2021, and 288 from the year 2022. The
+raw data contained observations from the year 1986 to 2023 but was
+cleaned to only contain the data from the years 2021 and 2022. The
+following table shows basic summary statistics for overall song
+popularity.
+
+```{r, table summary, echo = FALSE, fig.cap = 'Summary table of Song Popularity Levels in 2021 and 2022', out.width = '50%', fig.align = 'center'}
+
+knitr::kable(
+  SpotifySongs %>%
+    summarize(
+      avg = mean(popularity),
+      std_dev = sd(popularity),
+      minimum = min(popularity),
+      maximum = max(popularity),
+      first_Q = quantile(popularity, 0.25),
+      third_Q = quantile(popularity, 0.75)
+    ),
+  align = "c",
+  format = "latex"
+)
+```
+
+The simple 5-number summary of popularity scores provides a concise yet
+powerful snapshot of the distribution of popularity within the music
+dataset. By examining key statistics such as the minimum, maximum,
+median, and quartiles, one can quickly grasp the spread and central
+tendency of popularity scores. This summary becomes particularly
+insightful when comparing two distinct groups, such as the songs from
+the years 2021 and 2022. The minimum and maximum values shed light on
+the range of popularity each year, identifying potential outliers or
+exceptional cases. The median offers a central reference point,
+indicating the middle popularity score, while the quartiles provide a
+sense of the overall distribution's shape. When investigating the
+factors influencing popularity, this summary acts as a foundation,
+allowing for a comprehensive understanding of the baseline trends.
+Moreover, it serves as a valuable benchmark for assessing the impact of
+different variables on popularity, providing context for the relative
+significance of various factors within the dynamic landscape of the
+music industry.
+
+\newpage
+
+## EDA
+
+In the exploration of factors contributing to the popularity of songs
+from 2021 to 2022, several key variables have been identified, including
+year, acousticness, energy, explicitness, and the principal song
+artist's followers. Recognizing that the exact numerical values of these
+variables might be less crucial than their categorical distinctions, a
+strategic approach was employed to enhance interpretability and
+facilitate meaningful comparisons. This categorization strategy allows
+for a more nuanced understanding of the impact of these variables on
+song popularity, enabling a focused analysis of trends and patterns
+within each subgroup.
+
+Explicitness, being a binary variable already, underwent no
+transformation, as its Boolean nature readily categorizes songs as
+either explicit or not. By employing this categorization methodology,
+the subsequent analysis seeks to unveil trends in popularity that may be
+associated with specific ranges or conditions within these variables.
+The accompanying histograms visually convey the rationale behind the
+chosen splits, providing a clear illustration of how each variable is
+divided to capture essential distinctions. This approach not only
+simplifies the interpretation of results but also aligns with the
+objective of uncovering overarching trends and patterns in the dynamic
+realm of music popularity.
+
+```{r,response hist, echo=FALSE, fig.cap = 'Histograms displaying the distribution of Popularity in the Spotify Songs Dataset', out.width = '90%', fig.align = 'center', fig.pos='h'}
+popularity_hist <- ggplot(na.omit(SpotifySongs), aes(x = popularity)) +
+  geom_histogram(bins = 30, fill = "lightblue", color = "black", alpha = 0.7, na.rm = TRUE) +
+  labs(title = "Popularity of Spotify Songs",
+       x = "Popularity",
+       y = "Frequency") +
+  theme_minimal() +
+  facet_wrap(~ ., scales = "free_x")
+
+popularity_hist
+```
+
+```{r,predictor hist, echo=FALSE, fig.cap = 'Histograms displaying the distribution of Principle Artist Followers, Song Duration, Acousticness, and Energy in the Spotify Songs Dataset', out.width = '90%', fig.align = 'center', fig.pos='h'}
+followers <- ggplot(na.omit(SpotifySongs), aes(x = principal_artist_followers)) +
+  geom_histogram(bins = 30, fill = "lightblue", color = "black", alpha = 0.7, na.rm = TRUE) +
+  labs(title = "Artist Followers",
+       x = "Song Artist Followers (Millions)",
+       y = "Frequency") +
+  theme_minimal() +
+  facet_wrap(~ ., scales = "free_x") +
+  scale_x_continuous(labels = scales::comma_format(scale = 1e-6))
+
+duration <- ggplot(na.omit(SpotifySongs), aes(x = duration_min)) +
+  geom_histogram(bins = 30, fill = "lightblue", color = "black", alpha = 0.7, na.rm = TRUE) +
+  labs(title = "Duration",
+       x = "Song Duration in Minutes",
+       y = "Frequency") +
+  theme_minimal() +
+  facet_wrap(~ ., scales = "free_x")
+
+acoustic <- ggplot(na.omit(SpotifySongs), aes(x = acousticness)) +
+  geom_histogram(bins = 30, fill = "lightblue", color = "black", alpha = 0.7) +
+  labs(title = "Acousticness",
+       x = "Acousticness of Song",
+       y = "Frequency") +
+  theme_minimal() +
+  facet_wrap(~ ., scales = "free_x")
+
+ener <- ggplot(na.omit(SpotifySongs), aes(x = energy)) +
+  geom_histogram(bins = 30, fill = "lightblue", color = "black", alpha = 0.7) +
+  labs(title = "Energy",
+       x = "Energy of Song",
+       y = "Frequency") +
+  theme_minimal() +
+  facet_wrap(~ ., scales = "free_x")
+
+grid.arrange(followers, duration, acoustic, ener, nrow = 2,ncol = 2)
+```
+
+## Variable Transformations
+
+In this data preparation process, the primary objective is to enhance
+the dataset's structure and make it more amenable for subsequent
+analysis. The process involves creating new categorical variables and
+ensuring the appropriate transformation of existing ones, all with the
+aim of capturing significant characteristics of the original features.
+
+### Transformation of Response Variable:
+
+The transformation of the response variable, "Popularity," is a critical
+aspect of modeling that aims to enhance the interpretability and
+predictive performance of the analysis. By transforming popularity into
+categorical bins, such as low, medium, and high popularity levels, we
+strive to capture nuanced patterns and relationships that might be
+obscured when treating popularity as a continuous variable.
+Categorization allows for the identification of distinct tiers of song
+popularity, enabling a more granular examination of the factors
+influencing different strata. This transformation not only simplifies
+the model interpretation but also accommodates potential non-linearities
+or threshold effects in the relationship between predictors and
+popularity. Furthermore, the categorization of popularity facilitates
+the exploration of factors that disproportionately impact songs within
+specific popularity ranges, providing valuable insights into the diverse
+dynamics that contribute to a song's overall success. This
+transformation aligns with the objective of creating a more accessible
+and actionable model, fostering a deeper understanding of the intricate
+interplay between various musical attributes and the diverse preferences
+of audiences across different popularity levels.
+
+### Transformations of Continuous Variables to Categorical:
+
+**Principal Artist Followers:**
+
+The transformation of the "Principal Artist Followers" variable into a
+categorical format was driven by the desire to capture the potential
+non-linear relationship between the number of followers and song
+popularity. The distribution of followers often exhibits a right-skewed
+pattern, with a few artists having an exceptionally large number of
+followers. By categorizing the variable, we aim to create meaningful
+groups that may better represent the influence of an artist's popularity
+on the overall popularity of a song. This categorical representation can
+help capture trends and patterns that may not be apparent when treating
+followers as a continuous variable. To most effectively categorize the
+values in this variable, a log transformation was performed.
+
+**Acousticness:**
+
+The transformation of "Acousticness" into a categorical variable is
+motivated by the recognition of its skewed distribution. Acousticness
+values often concentrate towards either extreme, representing either
+predominantly acoustic or non-acoustic characteristics. Categorizing
+acousticness allows for the exploration of potential thresholds that
+delineate distinct acoustic profiles. This transformation facilitates
+the examination of whether certain ranges of acousticness significantly
+impact song popularity, providing insights into how acoustic elements
+influence audience preferences. To most effectively categorize the
+values in this variable, a log transformation was performed.
+
+**Energy:**
+
+The decision to categorize "Energy" stems from its observed
+distribution, which may exhibit asymmetry or multimodality. By
+transforming energy into a categorical variable, we aim to capture
+different energy levels that could have varying impacts on song
+popularity. Categorization allows for the exploration of potential
+breakpoints or ranges where energy levels significantly influence
+audience engagement. This approach facilitates a more nuanced analysis
+of how energy contributes to the overall appeal of a song.
+
+**Duration_Min:**
+
+Categorizing "Duration_Min" is motivated by its potential non-linear
+relationship with song popularity. Song durations may naturally fall
+into distinct ranges (e.g., short, medium, long), each influencing
+audience reception differently. By converting duration into categories,
+we aim to identify meaningful segments where variations in song duration
+correlate with changes in popularity. This categorical representation
+enables a more interpretable analysis of how different durations
+contribute to a song's likelihood of success.
+
+### Variables with no Transformation:
+
+**Explicit:**
+
+The "Explicit" variable, indicating whether a song contains explicit
+content, is inherently binary (TRUE/FALSE). As a binary categorical
+variable, explicitness already effectively captures its nature, and
+further transformations are unnecessary. The binary representation
+straightforwardly communicates the presence or absence of explicit
+content, facilitating interpretability without the need for additional
+modifications.
+
+**Year:**
+
+The "Year" variable, representing the year of a song's release, is
+typically treated as a categorical variable without the need for
+additional transformations. Each unique year serves as a distinct
+category, allowing for the exploration of temporal trends in song
+popularity. The inherent categorical nature of years simplifies the
+analysis of how popularity evolves over time, making it unnecessary to
+apply additional transformations to this variable.
+
+```{r, data manipulation, echo=FALSE}
+breaks <- quantile(SpotifySongs$popularity, probs = c(0, 0.33, 0.67, 1))
+categories <- c("Low", "Medium", "High")
+
+# Create a new column 'popularity_category' in the dataset
+SpotifySongs$popularity <- cut(SpotifySongs$popularity, breaks = breaks, labels = categories, include.lowest = TRUE)
+
+# Assuming your dataset is called SpotifySongs
+
+# Transform principal_artist_followers using log transformation
+SpotifySongs$log_followers <- log1p(SpotifySongs$principal_artist_followers)
+
+# Define breaks for categorization
+breaks_followers <- quantile(SpotifySongs$log_followers, probs = c(0, 0.25, 0.5, 0.75, 1), na.rm = TRUE)
+categories_followers <- c("Very Low", "Low", "Medium", "High")
+
+# Create a new column 'followers_category' in the dataset
+SpotifySongs$followers_category <- cut(SpotifySongs$log_followers, breaks = breaks_followers, labels = categories_followers, include.lowest = TRUE)
+
+# Transform acousticness using log transformation
+SpotifySongs$log_acousticness <- log1p(SpotifySongs$acousticness)
+
+# Define breaks for categorization
+breaks_acousticness <- quantile(SpotifySongs$log_acousticness, probs = c(0, 0.25, 0.5, 0.75, 1), na.rm = TRUE)
+categories_acousticness <- c("Very Low", "Low", "Medium", "High")
+
+# Create a new column 'acousticness_category' in the dataset
+SpotifySongs$acousticness_category <- cut(SpotifySongs$log_acousticness, breaks = breaks_acousticness, labels = categories_acousticness, include.lowest = TRUE)
+
+# Transform energy using quantiles
+breaks_energy <- quantile(SpotifySongs$energy, probs = c(0, 0.25, 0.5, 0.75, 1), na.rm = TRUE)
+categories_energy <- c("Very Low", "Low", "Medium", "High")
+SpotifySongs$energy_category <- cut(SpotifySongs$energy, breaks = breaks_energy, labels = categories_energy, include.lowest = TRUE)
+
+# Transform duration_min using quantiles
+breaks_duration <- quantile(SpotifySongs$duration_min, probs = c(0, 0.25, 0.5, 0.75, 1), na.rm = TRUE)
+categories_duration <- c("Very Short", "Short", "Medium", "Long")
+SpotifySongs$duration_category <- cut(SpotifySongs$duration_min, breaks = breaks_duration, labels = categories_duration, include.lowest = TRUE)
+
+# Create a new dataframe with selected variables
+model_data <- data.frame(
+  popularity = SpotifySongs$popularity,
+  explicit = SpotifySongs$explicit,
+  year = SpotifySongs$year,
+  principal_artist_followers = SpotifySongs$followers_category,
+  acousticness = SpotifySongs$acousticness_category,
+  energy = SpotifySongs$energy_category,
+  duration_min = SpotifySongs$duration_category
+)
+
+# Convert categorical variables to factors
+model_data$popularity <- as.factor(model_data$popularity)
+model_data$explicit <- as.factor(model_data$explicit)
+model_data$year <- as.factor(model_data$year)
+model_data$principal_artist_followers <- as.factor(model_data$principal_artist_followers)
+model_data$acousticness <- as.factor(model_data$acousticness)
+model_data$energy <- as.factor(model_data$energy)
+model_data$duration_min <- as.factor(model_data$duration_min)
+```
+
+| Variable         |     | | Values                          |
+|------------------|-----|--|---------------------------------|
+| Popularity       |     | |High, Medium, Low               |
+| Year             |     | |2021, 2022                      |
+| Artist Followers |     | |High, Medium, Low, Very Low     |
+| Song Length      |     | |Long, Medium, Short, Very Short |
+| Acousticness     |     | |High Medium, Low, Very Low      |
+| Energy           |     | |High, Medium, Low, Very Low     |
+| Explicit         |     | |TRUE, FALSE                     |
+
+# Testing
+
+Understanding the factors that contribute to the popularity of songs is
+crucial in the dynamic landscape of the music industry. To delve into
+this inquiry, a logistic regression model was meticulously crafted,
+aiming to unravel the intricate relationships between various predictors
+and the likelihood of a song becoming popular. The decision to transform
+continuous variables into categorical ones was guided by the desire to
+capture nonlinear patterns and enhance the interpretability of the
+model. Noteworthy is the deliberate choice to limit the model to two-way
+interactions. This strategic simplification was necessitated by the
+observed overfitting when introducing three-way interactions, where each
+three-way interaction term failed to reach statistical significance. By
+focusing on two-way interactions, the model strikes a balance between
+complexity and interpretability, paving the way for a more nuanced
+understanding of the predictors affecting song popularity.
+
+In the pursuit of refining the logistic regression model, a stepwise
+regression procedure was employed. This methodological approach
+systematically selected significant predictors, contributing to a more
+precise and parsimonious model. The subsequent application of Likelihood
+Ratio Tests and Wald Tests served as essential tools for assessing both
+the overall model significance and the individual contributions of
+predictors. These statistical examinations not only validate the model's
+fitness but also uncover the specific variables that wield significant
+influence over the popularity of songs in the dataset.@R-LR
+
+Here is the formula for the Logistic Regression:
+
+${logit}(p) = \beta_0 + \beta_{{{explicit}}} \cdot {{explicit}} + \beta_{{{year}}} \cdot {{year}} + \beta_{{{followers}}} \cdot {{principal\_artist\_followers}} + \beta_{{{acoustic}}} \cdot {{acousticness}} + \beta_{{{energy}}} \cdot {{energy}} + \beta_{{{duration}}} \cdot {{duration\_min}} + \beta_{{{explicit:year}}} \cdot ({{explicit}} \cdot {{year}}) + \ldots + \varepsilon$
+
+The decision to perform both a logistic regression and a Wald test on
+the GLM results is specifically tailored to our research objectives. LR
+enables us to assess the overall significance of the model, helping us
+understand whether the selected variables collectively contribute
+significantly to the variation in song popularity across the dataset.
+Simultaneously, the Wald test offers a granular examination of
+individual predictors and interaction terms, allowing us to pinpoint
+which factors play a statistically significant role in shaping song
+popularity. This dual-testing strategy is crucial for ensuring the
+validity of our model, as it provides insights into both the global and
+specific impacts of each variable, facilitating a comprehensive
+interpretation of the complex dynamics underlying Spotify song
+popularity trends.
+
+```{r, echo=FALSE}
+# Fit logistic regression model
+logistic_model <- glm(popularity ~ (.)^2, data = model_data, family = "binomial")
+
+# Model selection using stepwise regression
+stepwise_model <- step(logistic_model, direction = "both", trace = FALSE)
+
+# Significance tests
+# ANOVA test for the full model
+anova_results <- anova(stepwise_model)
+
+lr_results <- lrtest(stepwise_model)
+
+# Wald test for individual coefficients
+wald_test_results <- coeftest(stepwise_model, vcov. = vcovHC)
+```
+
+Creating a Regression Coefficients and 95% Confidence Intervals graph
+before delving into numerical results from the ANOVA is immensely useful
+as it provides an immediate, visual overview of the impact each
+predictor variable has on song popularity within the SpotifySongs
+dataset. The graph serves as an intuitive guide for identifying
+influential features and their respective magnitudes, allowing
+researchers to form initial hypotheses about key factors driving
+popularity. Moreover, the inclusion of confidence intervals offers a
+visual cue for the precision of the estimates, aiding in the
+prioritization of statistically significant predictors. This upfront
+visual exploration enhances the efficiency of the subsequent numerical
+analysis, enabling a more focused and informed interpretation of the
+ANOVA results @R-Modelest.
+
+```{r glm coefficient ci, echo=FALSE, fig.cap = 'GLM Predictor Variable Coefficients with 95% Confidence', out.width = '90%', fig.align = 'center', fig.pos='h'}
+# Get coefficient data
+coef_data <- as.data.frame(coef(summary(stepwise_model)))
+
+# Create a column for x-axis labels
+coef_data$Predictor <- paste0("P", seq_len(nrow(coef_data)))
+
+# Set the order of levels for the "Predictor Variable" factor
+coef_data$Predictor <- factor(coef_data$Predictor, levels = paste0("P", seq_len(nrow(coef_data))))
+
+# Plot coefficients and confidence intervals
+ggplot(coef_data, aes(x = Predictor, y = Estimate)) +
+  geom_bar(stat = "identity", position = "dodge", fill = "skyblue", color = "black") +
+  geom_errorbar(aes(ymin = Estimate - 1.96 * `Std. Error`, ymax = Estimate + 1.96 * `Std. Error`),
+                position = position_dodge(0.9), width = 0.2, color = "black") +
+  labs(title = "GLM Coefficients and 95% Confidence Intervals",
+       x = "Predictor Variable",
+       y = "Estimated Coefficient") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+Interpreting this graph for the SpotifySongs dataset involves examining
+the estimated coefficients associated with each predictor variable. In
+this context, each bar on the graph represents a specific predictor
+variable, such as explicitness, year, top_artists, and various
+interactions. The height of each bar reflects the estimated coefficient,
+indicating the direction and magnitude of its influence on the
+popularity of songs in the dataset. The accompanying error bars denote
+the 95% confidence interval around each coefficient, aiding in the
+assessment of the statistical significance of the effects. If the
+confidence interval includes zero, it suggests that the corresponding
+predictor variable may not have a statistically significant impact on
+song popularity.
+
+Creating a Coefficients and 95% Confidence Intervals graph for
+SpotifySongs is particularly valuable for understanding the specific
+factors influencing song popularity. For instance, it allows for the
+identification of significant predictors, such as explicitness, year,
+and interactions between these variables. The inclusion of confidence
+intervals provides a measure of uncertainty around the estimated
+coefficients, offering insights into the precision of the model. This
+visual representation aids researchers in pinpointing influential
+features and making informed decisions about the relevance of each
+predictor variable in explaining variations in song popularity within
+the SpotifySongs dataset. Overall, the graph enhances the
+interpretability of the model and supports data-driven insights tailored
+to the characteristics of the SpotifySongs dataset.
+
+\newpage
+
+# Results
+
+The likelihood ratio test (LR test) was conducted to assess the overall
+significance of the logistic regression model. The null hypothesis
+(Model 2) posits that the reduced model with no predictors (intercept
+only) is sufficient, while the alternative hypothesis (Model 1) suggests
+that the predictors included in the full model improve the fit
+significantly. The test results reveal a substantial improvement in
+model fit, as evidenced by a chi-squared statistic of 141.85 with 36
+degrees of freedom (p-value \~ 0). The highly significant p-value
+strongly rejects the null hypothesis, indicating that the predictors
+collectively contribute significantly to explaining the variability in
+song popularity. Therefore, we can conclude that the logistic regression
+model, including explicit, year, principal_artist_followers,
+acousticness, energy, and their interactions, provides a better fit to
+the data than the intercept-only model. This underscores the importance
+of the considered predictors in capturing the nuanced relationships
+influencing song popularity.
+
+The Analysis of Deviance Table provides insights into the sequential
+addition of terms to the logistic regression model for predicting song
+popularity. The table displays the degrees of freedom (Df), deviance
+values, and residual degrees of freedom and deviance at each step. The
+null model, representing the intercept-only model with no predictors,
+serves as the baseline, having 547 degrees of freedom and a deviance of
+733.20. As terms are added sequentially, we observe changes in deviance
+and degrees of freedom.
+
+The Wald test results provide insights into the individual significance
+of each predictor in the logistic regression model for song popularity.
+The Wald test assesses the null hypothesis that the coefficient of each
+predictor is equal to zero, implying no contribution to the model. Here
+are the key findings:
+
+-   The intercept is significantly different from zero (z = -2.4298, p =
+    0.0151), indicating that the baseline log-odds of popularity is
+    significantly different from zero.
+
+-   Among the main effects, principal_artist_followers (Medium and High
+    levels) and acousticness (High level) are significant predictors of
+    song popularity.
+
+-   The interaction terms that involve explicit, year, and
+    principal_artist_followers are also significant, suggesting that
+    these interactions contribute significantly to explaining the
+    variability in popularity.
+
+-   For instance, the interaction between explicit and year2022 is
+    significant (z = -2.0891, p = 0.0367), implying that the effect of
+    explicit on popularity is different in the year 2022 compared to
+    other years.
+
+-   The interaction between principal_artist_followersHigh and energyLow
+    is noteworthy (z = -2.8889, p = 0.0039), indicating a significant
+    interaction effect on popularity.
+
+These results collectively underscore the importance of considering both
+main effects and interactions in understanding the factors influencing
+song popularity. The significance of various predictors and their
+interactions provides valuable information for refining strategies aimed
+at enhancing a song's popularity.
+
+### Significant Model Terms and Their P-Values:
+
+The logistic regression model includes several significant factors and
+interactions. Notably, the presence of explicit content (`explicitTRUE`)
+has a significant impact on popularity, with a p-value of 0.02407. The
+interaction between explicit content and the year 2022
+(`explicitTRUE:year2022`) is also significant (p-value = 0.02407).
+Principal artist followers exhibit a strong influence, with the
+followers at the high level (`principal_artist_followersHigh`) having a
+significant positive effect (p-value = 0.00231). Additionally,
+interactions between explicit content and various factors such as
+principal artist followers, acousticness, and energy show significance.
+
+### Best Model Equation:
+
+The logistic regression equation for predicting popularity based on the
+significant factors and interactions can be represented in LaTeX as
+follows:
+
+$P({Popularity} = 1) = \frac{1}{1 + e^{-(\beta_0 + \beta_1 \cdot {Explicit} + \beta_2 \cdot {Year2022} + \ldots + \beta_{n} \cdot {Interaction Term})}}$
+
+### Interpretation of Significant Factors and Interactions:
+
+The statistical significance of certain factors and interactions
+suggests their importance in predicting the popularity of songs. For
+instance, the positive coefficient of `principal_artist_followersHigh`
+implies that a higher number of followers for the principal artist
+significantly increases the odds of a song being popular. The
+interaction between explicit content and the year 2022 indicates a
+changing impact over time, with the effect of explicit content being
+more pronounced in 2022. These findings provide valuable insights for
+decision-makers in the music industry.
+
+While statistical significance is crucial, it's essential to consider
+practical significance as well. The magnitude of the coefficients should
+be taken into account, as they represent the change in the log-odds of
+popularity for a one-unit change in the predictor. Additionally, the
+context of the problem and domain knowledge are essential for a
+comprehensive understanding. In summary, the model highlights key
+factors and interactions that statistically contribute to song
+popularity, forming a basis for informed decision-making in the music
+industry.
+
+\newpage
+
+# Summary of Conclusions
+
+**Conclusion:**
+
+In conclusion, the logistic regression model developed for predicting
+song popularity reveals several significant factors and interactions.
+Explicit content, denoted by `explicitTRUE`, emerges as a noteworthy
+predictor with a p-value of 0.02407, signifying its impact on song
+popularity. The interaction between explicit content and the year 2022
+(`explicitTRUE:year2022`) is also statistically significant (p-value =
+0.02407), suggesting a time-dependent influence of explicit content.
+Principal artist followers play a crucial role, particularly at the high
+followers level (`principal_artist_followersHigh`), displaying a
+significant positive effect (p-value = 0.00231). Interactions involving
+explicit content with principal artist followers, acousticness, and
+energy exhibit significance, emphasizing the complex interplay of these
+factors.
+
+The logistic regression equation, expressed in LaTeX, encapsulates the
+predictive power of the identified factors and interactions.
+Interpretation of these significant factors underscores their practical
+implications. For instance, a higher number of followers for the
+principal artist significantly increases the odds of a song being
+popular, as indicated by the positive coefficient of
+`principal_artist_followersHigh`. The interaction between explicit
+content and the year 2022 suggests a dynamic impact over time, with
+explicit content becoming more influential in 2022.
+
+While statistical significance is paramount, practical significance is
+equally vital. Considering the magnitude of coefficients and
+understanding their implications in the context of the music industry is
+crucial. The model provides valuable insights for decision-makers,
+offering a foundation for informed choices in marketing and promoting
+songs. In summary, the logistic regression model sheds light on key
+factors influencing song popularity, paving the way for data-driven
+decision-making in the ever-evolving landscape of the music industry.
+
+# Future Recommendations
+
+Future research endeavors can extend our understanding of song
+popularity dynamics within the SpotifySongs dataset by exploring various
+dimensions. Firstly, expanding the temporal scope beyond the current
+years could offer insights into evolving trends and preferences.
+Additionally, incorporating gender as a factor may unveil
+gender-specific patterns in music preferences, adding a nuanced layer to
+the analysis. Moreover, breaking down the yearly analysis into smaller
+temporal units, such as months or weeks, could reveal more granular
+patterns and potential seasonality effects. Exploring regional
+variations in song popularity, considering diverse genres, and
+incorporating external factors like cultural events or global phenomena
+could also contribute to a comprehensive understanding of the
+multifaceted determinants of song popularity. These avenues for future
+research promise to enhance our insights into the complex interplay of
+factors influencing the popularity of songs on the Spotify platform.
+
+This analysis has also sparked my interest in analyzing the release
+timing of albums and songs. Looking at trends throughout years can give
+a big picture of release and popularity trends, but it would be
+beneficial to look at the popularity scores of songs throughout months
+of the year. This would give insight into when highly anticipated media
+would be released.
+
+\newpage
+
+# References
+
+::: {#refs}
+:::
+
+\newpage
+
+# Appendix
+
+```{r}
+data_preview <- read.csv("cleaned_merged_2021_2022.csv")
+
+# Display the first 3 rows of raw data
+head(data_preview)
+```
+
+```{r ref.label = knitr::all_labels(), echo = TRUE, eval = FALSE}
+
+```
